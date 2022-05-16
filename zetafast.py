@@ -1,16 +1,17 @@
 import math
-from newton import newton_method
-import scipy.special
 from sum import compute_sum
+from scipy.optimize import fsolve
+from mpmath import mp 
 
-accuracy = 0.05
+accuracy = 10e-3   
+lambda_var = 3.151
 
 def q_gamma(v, m):
     w = 0
     w_limit = v-1
     sum = 0
     while w < w_limit:
-        sum += m**w / math.factorial(w) * (math.e ** -m)
+        sum += m**w / mp.factorial(w) * (math.e ** -m)
         w+=1
     return sum
 
@@ -19,45 +20,57 @@ def resolve_capital_n(v, tau):
 
 def resolve_v(sigma, tau):
     def f(x):
-        return (x - max((1-sigma)/2, 0) * math.log(1/2 + x + tau))/math.log(8/accuracy) - 1
-    return newton_method(f, 1, accuracy)
+        return x - (max((1-sigma)/2, 0) * math.log(1/2 + x + tau)) - math.log(8/accuracy)
+    return math.ceil(fsolve(f, 1))
 
 def d_series(s, v, N):
     def f(n):
-        return 1/(n**s) * q_gamma(v, n / N)
+        return n**-s * q_gamma(v, n / N)
     return compute_sum(f)
+
+def d_series_lambda(s, v, N):
+    def f(n):
+        return n**-s * q_gamma(v, n / N)
+    n = 1
+    sum = 0
+    while n < math.ceil(lambda_var*v*N):
+        sum+=f(n)
+        n+=1
+    return sum
+
+def complex_exponent(exponent):
+    return mp.mpf(math.e)**mp.mpf(exponent.real)*mp.mpc(complex(math.cos(exponent.imag),math.sin(exponent.imag)))
 
 def e_1_series(s, N, sign):
     def f(m):
-        returne_m_sum += e_miu_1_series(m, s, N, sign)
-    compute_sum(f)
-    return ((2*math.pi) ** s-1) * scipy.special.gamma(1 - s) * (math.e ** (sign*(math.pi/2)*(1-s)))
+        e_miu_1_series(m, s, N, sign)
+    return ((2*math.pi) ** s-1) * mp.gamma(1 - s) * complex_exponent(complex(0,sign)*(math.pi/2)*(1-s)) * compute_sum(f)
 
 def e_miu_1_series(m, s, N, sign):
     def f(w):
-        return (scipy.special.gamma(s) / (math.factorial(w)*scipy.special.gamma((s-1)-w + 1))) * ((m + (sign/(2* math.pi * N)))**s-1-w) * ((-sign/(2*math.pi*N))**w)
+        return mp.binomial(s-1, w) * ((m + (sign/(2* math.pi * N)))**s-1-w) * ((complex(0,-sign)/(2*math.pi*N))**w)
     return (m**(s - 1)) - compute_sum(f)
 
+def e_1_series_m_s(capital_M, s):
+    sum = 0
+    m = 1
+    while capital_M <= m:
+        s+=e_1_series_m_s(m, s)
+        m+=1
+    return ((2*math.pi)**(s-1))*mp.gamma(1-s)*complex_exponent(complex(0,math.pi/2)*(1-s))*sum
+
 def gamma(s, v, N):
-    return (scipy.special.gamma(1-s + v) / ((1 - s) * math.gamma(v))) * N**(1-s)
+    return (mp.gamma(1-s + v) / ((1 - s) * mp.gamma(v))) * N**(1-s)
 
-def zetafast():
-    s = 0.5 + 14.134725141734693790457251983562j
+def zetafast(s):
     v = resolve_v(s.real, s.imag)
-    #print(v)
     N = resolve_capital_n(v, s.imag)
-    #print (N)
-    d_series_value = d_series(s, v, N)
-    #print (d_series_value)
-    e_series_positive = e_1_series(s, N, 1)
-    #print(e_series_positive)
-    e_series_negative =  e_1_series(s, N, -1)
-    #print(e_series_negative)
-    gamma_value = gamma(s, v, N)
-    #print(gamma_value)
-    zeta = d_series_value + e_series_positive + e_series_negative - gamma_value
-    s= s+0.0005j
-    print(s)
-    print(zeta)
-
-zetafast()
+    #if 0 <= s.real and s.real <= 2 and s.imag > 0 and accuracy <= 0.05:
+    #    c = 0.5
+    #    return d_series_lambda(s,v,N) + e_1_series_m_s(math.ceil(N),s) - gamma(s, v, N) + c*accuracy
+    #else:
+    if s.imag == 0:
+        c = 0.5
+        return d_series_lambda(s,v,N) - gamma(s,v,N) + c*accuracy
+    else:
+        return d_series(s,v,N) + e_1_series(s, N, 1) + e_1_series(s, N, -1) - gamma(s, v, N)
