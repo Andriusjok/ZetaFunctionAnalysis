@@ -19,6 +19,8 @@ def resolve_capital_n(v, tau):
 def resolve_v(sigma, tau, accuracy):
     def f(x):
         return x - max((1-sigma)/2, 0) * math.log(1/2 + x + tau) - math.log(8/accuracy)
+    if sigma >= 1:
+        return mp.ceil(math.log(8/accuracy))
     newton = next(Newton(mp, f= f, x0 = [5]).__iter__())
     return mp.ceil(newton[0])
 
@@ -56,7 +58,6 @@ def e_miu_1_series(m, s, N, sign, v):
 def e_1_series_m_s(capital_M, s, N, v):
     sum = 0
     m = 1
-    # TODO: find out why this doesnt work
     while m <= capital_M:
         sum+=e_miu_1_series(m, s, N, 1, v)
         m = m+1
